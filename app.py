@@ -15,11 +15,15 @@ import numpy as np
 import shap
 from module_b_scaling_bridge import ScalingBridge
 from anomaly_detector import AnomalyDetector
+from chatbot_engine import MedicalChatbot
 from models import db, User, Prediction
 import traceback
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'mediguard-ai-secret-key-2024'
+app.secret_key = 'mediguard_ai_secret_key_change_in_production'  # Change for production
+
+# Initialize Chatbot
+chatbot = MedicalChatbot()
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mediguard.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Disable template caching to ensure fresh template loading
@@ -205,6 +209,28 @@ def login():
             flash('Invalid username or password.', 'error')
     
     return render_template('login.html')
+
+@app.route('/chatbot')
+@login_required
+def chatbot_page():
+    """Render the chatbot interface"""
+    return render_template('chatbot.html', user=current_user)
+
+@app.route('/api/chatbot', methods=['POST'])
+@login_required
+def chatbot_api():
+    """Handle chatbot conversation"""
+    data = request.get_json()
+    user_message = data.get('message', '')
+    session_context = data.get('context', {})
+    
+    if not user_message:
+        return jsonify({'error': 'No message provided'}), 400
+        
+    # Process message
+    response = chatbot.process_message(user_message, session_context)
+    
+    return jsonify(response)
 
 @app.route('/logout')
 @login_required
@@ -505,6 +531,67 @@ def predict():
         
         # Round to 2 decimal places
         confidence = round(confidence, 2)
+        
+        # --- CARDIAC MARKER DETECTION (Critical Safety Override) ---
+        # Training data has ZERO heart disease samples, so model cannot predict it
+        # Use rule-based detection for critical cardiac injury markers
+        cardiac_risk_score = 0
+        cardiac_indicators = []
+        
+        # Critical marker: Troponin (cardiac injury)
+        if raw_features['Troponin'] > 0.04:
+            troponin_severity = raw_features['Troponin'] / 0.04
+            cardiac_risk_score += min(40, troponin_severity * 20)
+            cardiac_indicators.append(f"Elevated Troponin ({raw_features['Troponin']:.3f} ng/mL, normal <0.04)")
+        
+        # Critical marker: C-reactive Protein (inflammation)
+        if raw_features['C-reactive Protein'] > 3.0:
+            crp_severity = raw_features['C-reactive Protein'] / 3.0
+            cardiac_risk_score += min(20, crp_severity * 10)
+            cardiac_indicators.append(f"High CRP ({raw_features['C-reactive Protein']:.1f} mg/L, normal <3.0)")
+        
+        # High LDL cholesterol
+        if raw_features['LDL Cholesterol'] > 160:
+            cardiac_risk_score += 15
+            cardiac_indicators.append(f"High LDL ({raw_features['LDL Cholesterol']:.0f} mg/dL)")
+        
+        # Low HDL cholesterol
+        if raw_features['HDL Cholesterol'] < 40:
+            cardiac_risk_score += 10
+            cardiac_indicators.append(f"Low HDL ({raw_features['HDL Cholesterol']:.0f} mg/dL)")
+        
+        # Hypertension
+        if raw_features['Systolic Blood Pressure'] > 140 or raw_features['Diastolic Blood Pressure'] > 90:
+            cardiac_risk_score += 15
+            cardiac_indicators.append(f"Hypertension ({raw_features['Systolic Blood Pressure']:.0f}/{raw_features['Diastolic Blood Pressure']:.0f} mmHg)")
+        
+        # High triglycerides
+        if raw_features['Triglycerides'] > 200:
+            cardiac_risk_score += 10
+            cardiac_indicators.append(f"High Triglycerides ({raw_features['Triglycerides']:.0f} mg/dL)")
+        
+        # Override prediction if cardiac risk is HIGH
+        if cardiac_risk_score >= 60 and prediction != 'Heart Di':
+            print(f"🚨 CARDIAC OVERRIDE: Risk score {cardiac_risk_score}, overriding {prediction} → Heart Di")
+            print(f"   Cardiac indicators: {', '.join(cardiac_indicators)}")
+            
+            original_prediction = prediction
+            original_confidence = confidence
+            
+            # Override to Heart Disease
+            prediction = 'Heart Di'
+            # Set confidence based on cardiac risk score
+            confidence = min(95.0, 50 + cardiac_risk_score * 0.7)
+            confidence = round(confidence, 2)
+            
+            # Update probability dict to reflect override
+            proba_dict['Heart Di'] = confidence / 100
+            # Reduce other probabilities proportionally
+            remaining_prob = (100 - confidence) / 100
+            other_classes = [c for c in class_names if c != 'Heart Di']
+            for cls in other_classes:
+                proba_dict[cls] = proba_dict.get(cls, 0) * remaining_prob
+        
         
         # Calculate risk level based on prediction type
         # Healthy = LOW risk, Diseases = HIGH/MEDIUM risk

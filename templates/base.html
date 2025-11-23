@@ -7,57 +7,65 @@
     <title>{% block title %}MediGuard AI{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
 
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow-sm">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="fas fa-hospital"></i> MediGuard AI
+            <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('index') }}">
+                <i class="fas fa-heartbeat me-2 fa-lg"></i> MediGuard AI
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto align-items-center">
                     {% if current_user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard') }}">
-                            <i class="fas fa-chart-line"></i> Dashboard
+                            <i class="fas fa-chart-line me-1"></i> Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('analytics') }}">
-                            <i class="fas fa-chart-bar"></i> Analytics
+                        <a class="nav-link" href="{{ url_for('chatbot_page') }}">
+                            <i class="fas fa-robot me-1"></i> AI Assistant
                         </a>
                     </li>
+                    <!-- Analytics removed as requested -->
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('reports') }}">
-                            <i class="fas fa-file-medical"></i> Reports
+                            <i class="fas fa-file-medical me-1"></i> Reports
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('profile') }}">
-                            <i class="fas fa-user"></i> Profile
+                    <li class="nav-item dropdown ms-lg-3">
+                        <a class="nav-link dropdown-toggle btn btn-outline-light rounded-pill px-3 py-1 border-0"
+                            href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1"></i> {{ current_user.username }}
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('logout') }}">
-                            <i class="fas fa-sign-out-alt"></i> Logout
-                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3">
+                            <li><a class="dropdown-item py-2" href="{{ url_for('profile') }}"><i
+                                        class="fas fa-user me-2 text-primary"></i> Profile</a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item py-2 text-danger" href="{{ url_for('logout') }}"><i
+                                        class="fas fa-sign-out-alt me-2"></i> Logout</a></li>
+                        </ul>
                     </li>
                     {% else %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('login') }}">
-                            <i class="fas fa-sign-in-alt"></i> Login
+                            <i class="fas fa-sign-in-alt me-1"></i> Login
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('register') }}">
-                            <i class="fas fa-user-plus"></i> Register
+                    <li class="nav-item ms-lg-2">
+                        <a class="nav-link btn btn-light text-primary rounded-pill px-4 fw-medium"
+                            href="{{ url_for('register') }}">
+                            Register
                         </a>
                     </li>
                     {% endif %}
@@ -69,10 +77,11 @@
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-    <div class="container mt-3">
+    <div class="container mt-4 position-relative" style="z-index: 1050;">
         {% for category, message in messages %}
-        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show"
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-sm border-0 rounded-3"
             role="alert">
+            <i class="fas fa-{{ 'exclamation-circle' if category == 'error' else 'info-circle' }} me-2"></i>
             {{ message }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -82,14 +91,40 @@
     {% endwith %}
 
     <!-- Main Content -->
-    <main>
+    <main class="flex-grow-1">
         {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="bg-dark text-white mt-5 py-4">
-        <div class="container text-center">
-            <p class="mb-0">&copy; 2024 MediGuard AI. Intelligent Triage Assistant.</p>
+    <footer class="bg-dark text-white mt-auto py-5">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-md-4 text-center text-md-start">
+                    <h5 class="fw-bold mb-3"><i class="fas fa-hospital me-2"></i>MediGuard AI</h5>
+                    <p class="text-muted small">Advanced medical triage and disease prediction powered by artificial
+                        intelligence. Assisting healthcare professionals in making faster, more accurate decisions.</p>
+                </div>
+                <div class="col-md-4 text-center">
+                    <h6 class="fw-bold mb-3 text-uppercase tracking-wider">Quick Links</h6>
+                    <ul class="list-unstyled text-muted small">
+                        <li class="mb-2"><a href="#" class="text-decoration-none text-muted hover-white">Privacy
+                                Policy</a></li>
+                        <li class="mb-2"><a href="#" class="text-decoration-none text-muted hover-white">Terms of
+                                Service</a></li>
+                        <li class="mb-2"><a href="#" class="text-decoration-none text-muted hover-white">Medical
+                                Disclaimer</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-4 text-center text-md-end">
+                    <h6 class="fw-bold mb-3 text-uppercase tracking-wider">Connect</h6>
+                    <div class="d-flex justify-content-center justify-content-md-end gap-3">
+                        <a href="#" class="text-white hover-primary"><i class="fab fa-twitter fa-lg"></i></a>
+                        <a href="#" class="text-white hover-primary"><i class="fab fa-linkedin fa-lg"></i></a>
+                        <a href="#" class="text-white hover-primary"><i class="fab fa-github fa-lg"></i></a>
+                    </div>
+                    <p class="mt-4 mb-0 text-muted small">&copy; 2025 MediGuard AI. All rights reserved.</p>
+                </div>
+            </div>
         </div>
     </footer>
 

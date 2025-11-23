@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}MediGuard AI - Medical Chatbot{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 fade-in">
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-8">
+            <div class="card shadow-lg border-0 rounded-4 h-100 overflow-hidden">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-3"
+                    style="background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-white text-primary rounded-circle d-flex align-items-center justify-content-center me-3 shadow-sm"
+                            style="width: 40px; height: 40px;">
+                            <i class="fas fa-robot fa-lg"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0 fw-bold">MediGuard Assistant</h5>
+                            <small class="opacity-75">AI-Powered Medical Triage</small>
+                        </div>
+                    </div>
+                    <span class="badge bg-white text-primary rounded-pill px-3">Beta</span>
+                </div>
+                <div class="card-body p-0 d-flex flex-column" style="height: 75vh; background-color: #f8f9fa;">
+                    <!-- Chat History -->
+                    <div id="chat-history" class="flex-grow-1 p-4 overflow-auto">
+                        <div class="d-flex justify-content-start mb-4">
+                            <div class="avatar me-3">
+                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                    style="width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary-color), var(--primary-light));">
+                                    <i class="fas fa-user-md"></i>
+                                </div>
+                            </div>
+                            <div class="message-content bg-white p-3 rounded-4 shadow-sm border"
+                                style="max-width: 85%; border-top-left-radius: 0 !important;">
+                                <p class="mb-0">Hello <strong>{{ user.username }}</strong>! I'm your MediGuard AI
+                                    assistant. I can help analyze your symptoms and clinical data.</p>
+                                <div class="mt-3 p-2 bg-light rounded-3 border border-light">
+                                    <small class="text-muted d-block mb-1"><i
+                                            class="fas fa-lightbulb text-warning me-1"></i> Try asking:</small>
+                                    <small class="d-block text-primary cursor-pointer">"I have chest pain and my
+                                        cholesterol is 240"</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="p-3 border-top bg-white">
+                        <form id="chat-form" class="d-flex gap-2 align-items-center">
+                            <div class="flex-grow-1 position-relative">
+                                <input type="text" id="user-input"
+                                    class="form-control form-control-lg border-0 bg-light ps-4"
+                                    placeholder="Type your symptoms or values..." autocomplete="off"
+                                    style="border-radius: 30px;">
+                            </div>
+                            <button type="submit"
+                                class="btn btn-primary btn-lg rounded-circle shadow-sm d-flex align-items-center justify-content-center"
+                                style="width: 50px; height: 50px;">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Context Data (Hidden) -->
+<script>
+    let sessionContext = {
+        values: {},
+        symptoms: []
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const chatHistory = document.getElementById('chat-history');
+
+        chatForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            // Add user message
+            appendMessage('user', message);
+            userInput.value = '';
+
+            // Show typing indicator
+            const typingId = showTypingIndicator();
+
+            // Send to API
+            fetch('/api/chatbot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message,
+                    context: sessionContext
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // Remove typing indicator
+                    removeTypingIndicator(typingId);
+
+                    // Update context
+                    if (data.context) {
+                        sessionContext = data.context;
+                    }
+
+                    // Add bot response
+                    appendMessage('bot', data.text, data.prediction);
+
+                    // Scroll to bottom
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                })
+                .catch(error => {
+                    removeTypingIndicator(typingId);
+                    appendMessage('bot', "I'm having trouble connecting right now. Please try again.");
+                    console.error('Error:', error);
+                });
+        });
+
+        function appendMessage(sender, text, prediction = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `d-flex justify-content-${sender === 'user' ? 'end' : 'start'} mb-4`;
+
+            let avatarHtml = '';
+            let contentClass = sender === 'user' ? 'bg-primary text-white' : 'bg-white text-dark';
+
+            if (sender === 'bot') {
+                avatarHtml = `
+                    <div class="avatar me-3">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center shadow-sm" 
+                             style="width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary-color), var(--primary-light));">
+                            <i class="fas fa-user-md"></i>
+                        </div>
+                    </div>
+                `;
+            } else {
+                contentClass = 'bg-primary text-white';
+            }
+
+            // Format text with markdown-like bolding
+            let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            formattedText = formattedText.replace(/\n/g, '<br>');
+            formattedText = formattedText.replace(/- /g, '• ');
+
+            let predictionHtml = '';
+            if (prediction) {
+                let alertClass = 'alert-info';
+                let icon = 'info-circle';
+
+                if (prediction.disease === 'Healthy') {
+                    alertClass = 'alert-success';
+                    icon = 'check-circle';
+                } else if (prediction.disease === 'Heart Di') {
+                    alertClass = 'alert-danger';
+                    icon = 'exclamation-triangle';
+                } else {
+                    alertClass = 'alert-warning';
+                    icon = 'exclamation-circle';
+                }
+
+                predictionHtml = `
+                    <div class="alert ${alertClass} mt-3 mb-0 border-0 shadow-sm">
+                        <h6 class="alert-heading fw-bold mb-1"><i class="fas fa-${icon} me-2"></i>Prediction: ${prediction.disease}</h6>
+                        <p class="mb-0 small opacity-75">Confidence: ${prediction.confidence.toFixed(1)}%</p>
+                    </div>
+                `;
+            }
+
+            messageDiv.innerHTML = `
+                ${sender === 'bot' ? avatarHtml : ''}
+                <div class="message-content ${contentClass} p-3 rounded-4 shadow-sm" style="max-width: 85%; ${sender === 'user' ? 'border-bottom-right-radius: 0 !important;' : 'border-top-left-radius: 0 !important;'}">
+                    <div class="mb-0">${formattedText}</div>
+                    ${predictionHtml}
+                </div>
+                ${sender === 'user' ? `
+                    <div class="avatar ms-3">
+                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center shadow-sm" 
+                             style="width: 40px; height: 40px; background-color: #6c757d;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const id = 'typing-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'd-flex justify-content-start mb-4';
+            div.innerHTML = `
+                <div class="avatar me-3">
+                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <i class="fas fa-user-md"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-3 rounded shadow-sm">
+                    <div class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            chatHistory.appendChild(div);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+    });
+</script>
+
+<style>
+    .typing-indicator span {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background-color: #ccc;
+        border-radius: 50%;
+        margin: 0 2px;
+        animation: typing 1s infinite;
+    }
+
+    .typing-indicator span:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .typing-indicator span:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes typing {
+
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-5px);
+        }
+    }
+</style>
+{% endblock %}
